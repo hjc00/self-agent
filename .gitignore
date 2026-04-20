@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+src-tauri/target/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Cache
+.cache/
+.parcel-cache/
+.vite/
+
+# Lock files (optional, uncomment if you don't want them)
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+# Rust
+Cargo.lock
+src-tauri/Cargo.lock
+
+# Generated files
+gen/
