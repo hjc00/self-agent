@@ -23,10 +23,48 @@ function App() {
         console.error('Failed to save position:', e);
       }
     });
+
     return () => {
       unlisten.then((fn) => fn());
     };
   }, []);
+
+  const restoreWindowPosition = async () => {
+    try {
+      const win = getCurrentWindow();
+      const [x, y] = await invoke<[number, number]>('load_window_position');
+
+      // Ensure window is visible first
+      await win.show();
+
+      if (x === -1 && y === -1) {
+        // First launch: position at bottom-right corner
+        // Use app window size instead of window.innerWidth which may be 0
+        const winProps = await win.innerSize();
+        const screenHeight = window.screen.availHeight;
+        const screenWidth = window.screen.availWidth;
+        const posX = Math.max(0, screenWidth - 100);
+        const posY = Math.max(0, screenHeight - 100);
+        await win.setPosition(new LogicalPosition(posX, posY));
+      } else {
+        // Restore saved position
+        await win.setPosition(new LogicalPosition(x, y));
+      }
+    } catch (e) {
+      console.error('Failed to restore window position:', e);
+      // Still try to show the window
+      getCurrentWindow().show();
+    }
+  };
+
+  const handleToggle = () => {
+    setMenuOpen(!menuOpen);
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    getCurrentWindow().close();
+  };
 
   const loadProjects = async () => {
     try {
@@ -37,29 +75,12 @@ function App() {
     }
   };
 
-  const restoreWindowPosition = async () => {
-    try {
-      const [x, y] = await invoke<[number, number]>('load_window_position');
-      const win = getCurrentWindow();
-      if (x === -1 && y === -1) {
-        // First launch: position at bottom-right corner using web API
-        const width = window.innerWidth;
-        const height = window.innerHeight;
-        const pos = new LogicalPosition(width - 100, height - 120);
-        await win.setPosition(pos);
-      } else {
-        // Restore saved position
-        await win.setPosition(new LogicalPosition(x, y));
-      }
-    } catch (e) {
-      console.error('Failed to restore window position:', e);
-    }
-  };
-
   const handleAddProject = async (name: string, path: string) => {
     try {
-      await invoke('add_project', { name, path });
-      await loadProjects();
+      const result = await invoke<Project>('add_project', { name, path });
+      console.log('Project added:', result);
+      const projects = await invoke<Project[]>('list_projects');
+      setProjects(projects);
     } catch (e) {
       console.error('Failed to add project:', e);
     }
@@ -83,8 +104,8 @@ function App() {
   };
 
   return (
-    <div className="app">
-      <FloatingBall isOpen={menuOpen} onClick={() => setMenuOpen(!menuOpen)} />
+    <div className="app" onContextMenu={handleContextMenu}>
+      <FloatingBall isOpen={menuOpen} onClick={handleToggle} />
       {menuOpen && (
         <ProjectMenu
           projects={projects}
