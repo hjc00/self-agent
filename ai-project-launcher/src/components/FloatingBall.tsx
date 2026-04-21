@@ -10,7 +10,6 @@ function FloatingBall({ isOpen, onClick }: FloatingBallProps) {
     <div
       className={`floating-ball ${isOpen ? 'open' : ''}`}
       onClick={onClick}
-      onMouseDown={(e) => e.stopPropagation()}
       data-tauri-drag-region
     >
       <div className="ball-inner">
