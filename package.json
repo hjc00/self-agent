@@ -1,0 +1,16 @@
+{
+  "name": "ai-floating-launcher",
+  "version": "1.0.0",
+  "description": "Desktop floating ball for quick access to Claude Code projects",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node dev.js",
+    "build": "electron-builder"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "cross-env": "^10.1.0",
+    "electron": "^33.4.0"
+  }
+}

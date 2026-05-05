@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: transparent;
+      border-radius: 8px;
+      overflow: hidden;
+      font-family: 'Segoe UI', sans-serif;
+      color: #fff;
+    }
+    @keyframes menuOpen {
+      from { transform-origin: top center; transform: scaleY(0); }
+      to   { transform-origin: top center; transform: scaleY(1); }
+    }
+    @keyframes menuClose {
+      from { transform-origin: top center; transform: scaleY(1); }
+      to   { transform-origin: top center; transform: scaleY(0); }
+    }
+    .menu-wrapper {
+      background: #2d2d2d;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+      padding-bottom: 4px;
+      transform: scaleY(0);
+    }
+    .menu-wrapper.open {
+      animation: menuOpen 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+    .menu-wrapper.closing {
+      animation: menuClose 0.18s ease-in forwards;
+    }
+    .header {
+      padding: 10px 12px;
+      background: #1a1a1a;
+      font-size: 12px; color: #888;
+      border-bottom: 1px solid #3d3d3d;
+    }
+    .project-list { max-height: 300px; overflow-y: auto; }
+    .project-item {
+      padding: 10px 12px; cursor: pointer;
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px;
+      transition: background 0.15s;
+    }
+    .project-item:hover { background: #3d3d3d; }
+    .project-item .icon { color: #f5a623; }
+    .divider {
+      height: 1px; background: #3d3d3d;
+      margin: 4px 0;
+    }
+    .settings-item {
+      padding: 10px 12px; cursor: pointer;
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px;
+      transition: background 0.15s;
+    }
+    .settings-item:hover { background: #3d3d3d; }
+    .settings-item .icon { color: #888; }
+    .quit-item {
+      padding: 10px 12px; cursor: pointer;
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px;
+      transition: background 0.15s;
+      color: #e81123;
+    }
+    .quit-item:hover { background: #3d3d3d; }
+    .quit-item .icon { color: #e81123; }
+    .empty {
+      padding: 20px 12px; text-align: center;
+      color: #666; font-size: 12px;
+    }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div class="menu-wrapper" id="menuWrapper">
+    <div class="header">项目列表</div>
+    <div class="project-list" id="projectList">
+      <div class="empty">加载中...</div>
+    </div>
+    <div class="divider"></div>
+    <div class="settings-item" id="addProjectBtn">
+      <span class="icon">＋</span>
+      <span>添加项目</span>
+    </div>
+    <div class="settings-item" id="settingsBtn">
+      <span class="icon">⚙</span>
+      <span>设置</span>
+    </div>
+    <div class="divider"></div>
+    <div class="quit-item" id="quitBtn">
+      <span class="icon">✕</span>
+      <span>退出</span>
+    </div>
+  </div>
+  <script>
+    var api = window.electronAPI;
+    var wrapper = document.getElementById('menuWrapper');
+
+    api.onMenuShow(function() {
+      requestAnimationFrame(function() {
+        wrapper.classList.add('open');
+      });
+    });
+
+    api.onMenuCloseRequest(function() {
+      if (wrapper.classList.contains('closing')) return;
+      wrapper.classList.remove('open');
+      wrapper.classList.add('closing');
+
+      var done = false;
+      function finish() {
+        if (done) return;
+        done = true;
+        api.notifyMenuAnimationDone();
+      }
+
+      wrapper.addEventListener('animationend', function handler(e) {
+        if (e.animationName === 'menuClose') {
+          wrapper.removeEventListener('animationend', handler);
+          finish();
+        }
+      });
+
+      setTimeout(finish, 350);
+    });
+
+    async function loadProjects() {
+      var list = document.getElementById('projectList');
+      var projects = [];
+      try {
+        projects = await api.getProjects();
+      } catch (e) {
+        projects = [];
+      }
+      list.innerHTML = '';
+
+      if (!projects || projects.length === 0) {
+        list.innerHTML = '<div class="empty">暂无项目，请编辑 projects.json</div>';
+        return;
+      }
+
+      projects.forEach(function(projectPath) {
+        var item = document.createElement('div');
+        item.className = 'project-item';
+        var name = projectPath.replace(/\\/g, '/').split('/').pop() || projectPath;
+        item.innerHTML = '<span class="icon">📁</span><span>' + name + '</span>';
+        item.title = projectPath;
+        item.addEventListener('click', function() {
+          api.launchProject(projectPath);
+          api.hideMenu();
+        });
+        list.appendChild(item);
+      });
+    }
+
+    document.getElementById('addProjectBtn').addEventListener('click', async function() {
+      const result = await api.addProject();
+      if (result.success) {
+        loadProjects();
+      } else if (result.reason === 'duplicate') {
+        api.log('项目已存在: ' + result.path);
+      }
+    });
+
+    document.getElementById('settingsBtn').addEventListener('click', function() {
+      api.hideMenu();
+      api.openSettings();
+    });
+
+    document.getElementById('quitBtn').addEventListener('click', function() {
+      api.quitApp();
+    });
+
+    loadProjects().then(function() {
+      requestAnimationFrame(function() {
+        var h = document.body.scrollHeight;
+        api.resizeMenu(h);
+      });
+    });
+  </script>
+</body>
+</html>
