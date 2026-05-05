@@ -529,7 +529,7 @@ ipcMain.handle('save-appearance', (event, appearance) => {
 
 // ---- App lifecycle ----
 function initPaths() {
-  configDir = path.join(app.getPath('appData'), 'com.ai-floating-launcher.app');
+  configDir = path.join(app.getPath('appData'), 'com.self-agent.app');
   configPath = path.join(configDir, 'config.json');
   projectsPath = path.join(configDir, 'projects.json');
 }

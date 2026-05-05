@@ -1,5 +1,5 @@
 {
-  "name": "ai-floating-launcher",
+  "name": "self-agent",
   "version": "1.0.0",
   "description": "Desktop floating ball for quick access to Claude Code projects",
   "main": "main.js",
@@ -11,6 +11,7 @@
   "license": "MIT",
   "devDependencies": {
     "cross-env": "^10.1.0",
-    "electron": "^33.4.0"
+    "electron": "^33.4.0",
+    "electron-builder": "^26.8.1"
   }
 }
