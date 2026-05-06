@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 64px; height: 64px;
+      background: transparent;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body>
+  <div id="ball"></div>
+  <script>
+    var api = window.electronAPI;
+    api.log('INIT');
+
+    var DEFAULT_SVG = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>');
+
+    var dynamicStyle = document.createElement('style');
+    dynamicStyle.id = 'dynamic-style';
+    document.head.appendChild(dynamicStyle);
+
+    var ball = document.getElementById('ball');
+    var downX = 0, downY = 0;
+    var isDown = false, moved = false;
+
+    function applyAppearance(appearance) {
+      if (!appearance) return;
+      var size = appearance.size || 64;
+      var color1 = appearance.color1 || '#667eea';
+      var color2 = appearance.color2 || '#764ba2';
+      var shape = appearance.shape || 'circle';
+      var borderRadius;
+      switch (shape) {
+        case 'circle': borderRadius = '50%'; break;
+        case 'rounded-square': borderRadius = '25%'; break;
+        case 'square': borderRadius = '0%'; break;
+        default: borderRadius = '50%';
+      }
+
+      var iconLayer;
+      if (appearance.icon_data) {
+        try {
+          // Test-load to detect invalid data URI
+          var testImg = new Image();
+          testImg.src = appearance.icon_data;
+          iconLayer = appearance.icon_data;
+        } catch (e) {
+          iconLayer = DEFAULT_SVG;
+        }
+      } else {
+        iconLayer = DEFAULT_SVG;
+      }
+
+      dynamicStyle.textContent =
+        'body { width: ' + size + 'px; height: ' + size + 'px; }' +
+        '#ball {' +
+        '  width: ' + size + 'px; height: ' + size + 'px;' +
+        '  border-radius: ' + borderRadius + ';' +
+        '  background: url("' + iconLayer + '") center/contain no-repeat, linear-gradient(135deg, ' + color1 + ' 0%, ' + color2 + ' 100%);' +
+        '  box-shadow: 0 4px 12px rgba(0,0,0,0.3);' +
+        '  cursor: default;' +
+        '  display: flex; align-items: center; justify-content: center;' +
+        '  user-select: none;' +
+        '}';
+    }
+
+    // Listen for appearance changes from main process
+    api.onAppearanceChanged(function(appearance) {
+      api.log('APPEARANCE-CHANGED');
+      applyAppearance(appearance);
+    });
+
+    // Initial load
+    api.getAppearance().then(applyAppearance).catch(function() {
+      applyAppearance({ size: 64, color1: '#667eea', color2: '#764ba2', shape: 'circle' });
+    });
+
+    ball.addEventListener('mousedown', function(e) {
+      isDown = true;
+      downX = e.screenX;
+      downY = e.screenY;
+      moved = false;
+      api.log('DOWN ' + e.screenX + ',' + e.screenY);
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', function(e) {
+      if (!isDown) return;
+      if (!moved && Math.abs(e.screenX - downX) < 2 && Math.abs(e.screenY - downY) < 2) return;
+      if (!moved) {
+        moved = true;
+        api.log('DRAG');
+      }
+      api.moveBall(e.movementX, e.movementY);
+    });
+
+    document.addEventListener('mouseup', function() {
+      if (isDown && !moved) {
+        api.log('CLICK');
+        api.showBallMenu();
+      }
+      isDown = false;
+      moved = false;
+    });
+  </script>
+</body>
+</html>

@@ -1,16 +1,16 @@
 {
-  "name": "self-agent",
+  "name": "ai-floating-launcher",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Desktop floating ball for quick access to Claude Code projects",
+  "main": "main.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "node dev.js",
+    "build": "electron-builder"
   },
-  "keywords": [],
   "author": "",
-  "license": "ISC",
-  "type": "commonjs",
+  "license": "MIT",
   "devDependencies": {
-    "@tauri-apps/cli": "^2.10.1"
+    "cross-env": "^10.1.0",
+    "electron": "^33.4.0"
   }
 }

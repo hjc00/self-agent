@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: transparent;
+      font-family: 'Segoe UI', sans-serif;
+      color: #fff;
+      height: 100vh;
+      overflow: hidden;
+      padding: 1px;
+    }
+    .window {
+      background: #1e1e1e;
+      border-radius: 10px;
+      height: 100%;
+      display: flex; flex-direction: column;
+      border: 1px solid #3a3a3a;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    }
+    .titlebar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px;
+      -webkit-app-region: drag;
+      border-bottom: 1px solid #333;
+      flex-shrink: 0;
+    }
+    .titlebar .title {
+      font-size: 13px; font-weight: 600;
+      color: #ccc;
+    }
+    .titlebar .close-btn {
+      -webkit-app-region: no-drag;
+      width: 28px; height: 28px;
+      border: none;
+      background: none;
+      color: #888;
+      font-size: 18px;
+      cursor: pointer;
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      padding: 0;
+    }
+    .titlebar .close-btn:hover {
+      background: #e81123;
+      color: #fff;
+    }
+    .content {
+      padding: 16px 24px 20px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .content::-webkit-scrollbar {
+      width: 6px;
+    }
+    .content::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .content::-webkit-scrollbar-thumb {
+      background: #555;
+      border-radius: 3px;
+    }
+    .content::-webkit-scrollbar-thumb:hover {
+      background: #777;
+    }
+    .section {
+      margin-bottom: 18px;
+    }
+    .section-label {
+      font-size: 13px; font-weight: 600;
+      color: #aaa;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .setting-item {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 12px;
+    }
+    .setting-item label { font-size: 14px; color: #ccc; cursor: pointer; min-width: 70px; }
+    input[type="checkbox"] {
+      width: 18px; height: 18px; cursor: pointer;
+    }
+    input[type="color"] {
+      width: 36px; height: 28px;
+      border: 1px solid #555;
+      border-radius: 4px;
+      cursor: pointer;
+      background: none;
+      padding: 2px;
+    }
+    input[type="range"] {
+      flex: 1;
+      accent-color: #667eea;
+    }
+    .size-display {
+      font-size: 14px; color: #ccc;
+      min-width: 50px; text-align: right;
+    }
+    .radio-group {
+      display: flex; gap: 16px;
+    }
+    .radio-group label {
+      font-size: 14px; color: #ccc; cursor: pointer;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .radio-group input[type="radio"] {
+      accent-color: #667eea;
+    }
+    button {
+      background: #667eea;
+      color: #fff;
+      border: none;
+      padding: 8px 18px;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      margin-right: 8px;
+    }
+    button:hover { background: #5a6fd6; }
+    button.secondary {
+      background: #3a3a3a;
+    }
+    button.secondary:hover { background: #4a4a4a; }
+    .icon-preview {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 8px;
+    }
+    .icon-preview img {
+      width: 48px; height: 48px;
+      border-radius: 8px;
+      border: 1px solid #555;
+      object-fit: contain;
+      background: #3a3a3a;
+    }
+    .icon-preview span {
+      font-size: 12px; color: #888;
+    }
+    .divider {
+      border-top: 1px solid #444;
+      margin: 18px 0;
+    }
+    .msg {
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      margin-top: 8px;
+    }
+    .msg-ok { color: #4caf50; }
+    .msg-err { color: #f44336; }
+    .hint {
+      font-size: 12px; color: #666;
+      margin-top: 16px; line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+<div class="window">
+  <div class="titlebar">
+    <span class="title">设置</span>
+    <button class="close-btn" onclick="window.close()">&times;</button>
+  </div>
+  <div class="content">
+
+  <div class="section">
+    <div class="section-label">外观设置</div>
+
+    <!-- Icon picker -->
+    <div class="setting-item">
+      <label>前景图标</label>
+      <button class="secondary" id="pickIconBtn">选择文件...</button>
+    </div>
+    <div class="icon-preview">
+      <img id="iconPreview" src="" style="display:none">
+      <span id="iconPlaceholder">未选择（使用默认地球图标）</span>
+    </div>
+
+    <!-- Color pickers -->
+    <div class="setting-item">
+      <label>渐变色 1</label>
+      <input type="color" id="color1">
+      <span id="color1Hex" style="font-size:13px;color:#ccc;">#667eea</span>
+    </div>
+    <div class="setting-item">
+      <label>渐变色 2</label>
+      <input type="color" id="color2">
+      <span id="color2Hex" style="font-size:13px;color:#ccc;">#764ba2</span>
+    </div>
+
+    <!-- Size slider -->
+    <div class="setting-item">
+      <label>大小</label>
+      <input type="range" id="sizeSlider" min="48" max="128" value="64">
+      <span class="size-display" id="sizeDisplay">64 px</span>
+    </div>
+
+    <!-- Shape radios -->
+    <div class="setting-item">
+      <label>形状</label>
+      <div class="radio-group">
+        <label><input type="radio" name="shape" value="circle" checked> 圆形</label>
+        <label><input type="radio" name="shape" value="rounded-square"> 圆角方形</label>
+        <label><input type="radio" name="shape" value="square"> 正方形</label>
+      </div>
+    </div>
+
+    <div>
+      <button id="saveAppearanceBtn">保存外观</button>
+      <span id="saveMsg" class="msg"></span>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="section">
+    <div class="section-label">启动项</div>
+    <div class="setting-item">
+      <input type="checkbox" id="autoStart">
+      <label for="autoStart" style="min-width:auto">开机自启</label>
+    </div>
+  </div>
+
+  <div class="hint">
+    配置文件位置：<br>
+    %APPDATA%\com.ai-floating-launcher.app\
+  </div>
+
+  </div><!-- .content -->
+</div><!-- .window -->
+
+  <script>
+    var api = window.electronAPI;
+    var autoStartCb = document.getElementById('autoStart');
+    var pickIconBtn = document.getElementById('pickIconBtn');
+    var iconPreview = document.getElementById('iconPreview');
+    var iconPlaceholder = document.getElementById('iconPlaceholder');
+    var color1Input = document.getElementById('color1');
+    var color2Input = document.getElementById('color2');
+    var color1Hex = document.getElementById('color1Hex');
+    var color2Hex = document.getElementById('color2Hex');
+    var sizeSlider = document.getElementById('sizeSlider');
+    var sizeDisplay = document.getElementById('sizeDisplay');
+    var saveBtn = document.getElementById('saveAppearanceBtn');
+    var saveMsg = document.getElementById('saveMsg');
+
+    var pendingIconData = '';
+
+    color1Input.addEventListener('input', function() {
+      color1Hex.textContent = color1Input.value;
+    });
+    color2Input.addEventListener('input', function() {
+      color2Hex.textContent = color2Input.value;
+    });
+    sizeSlider.addEventListener('input', function() {
+      sizeDisplay.textContent = sizeSlider.value + ' px';
+    });
+
+    pickIconBtn.addEventListener('click', async function() {
+      try {
+        var dataUri = await api.pickIcon();
+        if (dataUri) {
+          pendingIconData = dataUri;
+          iconPreview.src = dataUri;
+          iconPreview.style.display = 'block';
+          iconPlaceholder.style.display = 'none';
+        }
+      } catch (e) { /* user cancelled or error */ }
+    });
+
+    saveBtn.addEventListener('click', async function() {
+      try {
+        var shapeEl = document.querySelector('input[name="shape"]:checked');
+        var appearance = {
+          icon_data: pendingIconData,
+          color1: color1Input.value,
+          color2: color2Input.value,
+          size: parseInt(sizeSlider.value),
+          shape: shapeEl ? shapeEl.value : 'circle'
+        };
+        var result = await api.saveAppearance(appearance);
+        if (result.success) {
+          saveMsg.textContent = '已保存';
+          saveMsg.className = 'msg msg-ok';
+        } else {
+          saveMsg.textContent = result.error || '保存失败';
+          saveMsg.className = 'msg msg-err';
+        }
+        setTimeout(function() { saveMsg.textContent = ''; }, 3000);
+      } catch (e) {
+        saveMsg.textContent = '保存失败';
+        saveMsg.className = 'msg msg-err';
+      }
+    });
+
+    async function loadSettings() {
+      try {
+        var enabled = await api.getAutoStart();
+        autoStartCb.checked = enabled;
+      } catch (e) {
+        autoStartCb.checked = false;
+      }
+
+      try {
+        var appearance = await api.getAppearance();
+        if (appearance) {
+          pendingIconData = appearance.icon_data || '';
+          if (appearance.icon_data) {
+            iconPreview.src = appearance.icon_data;
+            iconPreview.style.display = 'block';
+            iconPlaceholder.style.display = 'none';
+          } else {
+            iconPreview.style.display = 'none';
+            iconPlaceholder.style.display = 'inline';
+          }
+          color1Input.value = appearance.color1 || '#667eea';
+          color2Input.value = appearance.color2 || '#764ba2';
+          color1Hex.textContent = color1Input.value;
+          color2Hex.textContent = color2Input.value;
+          sizeSlider.value = appearance.size || 64;
+          sizeDisplay.textContent = sizeSlider.value + ' px';
+          var shapeRadio = document.querySelector('input[name="shape"][value="' + (appearance.shape || 'circle') + '"]');
+          if (shapeRadio) shapeRadio.checked = true;
+        }
+      } catch (e) { /* use defaults */ }
+    }
+
+    autoStartCb.addEventListener('change', async function() {
+      try {
+        await api.setAutoStart(autoStartCb.checked);
+      } catch (e) { /* ignore */ }
+    });
+
+    loadSettings();
+  </script>
+</body>
+</html>
