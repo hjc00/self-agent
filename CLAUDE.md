@@ -95,4 +95,3 @@ All new windows and UI should follow these conventions (established with setting
 - The tray icon is programmatically generated at runtime (16x16 RGBA buffer, purple circle) — no icon files needed
 - `window-all-closed` is intentionally a no-op: the app stays alive in the system tray
 - Menu window auto-closes on blur; clicking a project or settings closes the menu before performing the action
-- **DEPLOY.md is outdated** — it references Tauri/Rust but the codebase was migrated to pure Electron. The build chain, project structure, and exe path in DEPLOY.md do not match the current code.
