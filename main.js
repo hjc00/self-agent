@@ -209,6 +209,7 @@ function createBallWindow() {
   });
 
   ballWindow.loadFile('src/ball.html');
+  ballWindow.setAlwaysOnTop(true, 'screen-saver');
   ballWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
   ballWindow.on('moved', () => {
@@ -264,6 +265,7 @@ function createMenuWindow() {
   });
 
   menuWindow.loadFile('src/menu.html');
+  menuWindow.setAlwaysOnTop(true, 'screen-saver');
   menuWindow.once('ready-to-show', () => {
     menuWindow.show();
     menuWindow.webContents.send('menu-show');
