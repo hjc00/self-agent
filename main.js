@@ -241,13 +241,30 @@ function createMenuWindow() {
     return;
   }
 
-  const [bx, by] = ballWindow.getPosition();
-  const menuX = bx + 64 + 6;
-  const menuY = by;
+  const screen = require('electron').screen;
+  const ballBounds = ballWindow.getBounds();
+  const workArea = screen.getDisplayMatching(ballBounds).workArea;
+
+  const MENU_WIDTH = 220;
+  const MENU_INITIAL_HEIGHT = 600;
+  const GAP = 6;
+
+  // Horizontal: prefer right of ball; flip to left if it would overflow
+  let menuX = ballBounds.x + ballBounds.width + GAP;
+  if (menuX + MENU_WIDTH > workArea.x + workArea.width) {
+    menuX = ballBounds.x - GAP - MENU_WIDTH;
+  }
+  if (menuX < workArea.x) menuX = workArea.x;
+  if (menuX + MENU_WIDTH > workArea.x + workArea.width) {
+    menuX = workArea.x + workArea.width - MENU_WIDTH;
+  }
+
+  // Vertical: align top with ball; actual height adjustment happens in resize-menu
+  let menuY = ballBounds.y;
 
   menuWindow = new BrowserWindow({
-    width: 220,
-    height: 600,
+    width: MENU_WIDTH,
+    height: MENU_INITIAL_HEIGHT,
     x: menuX,
     y: menuY,
     frame: false,
@@ -472,19 +489,29 @@ ipcMain.handle('quit-app', () => {
 
 ipcMain.handle('resize-menu', (event, height) => {
   if (menuWindow && !menuWindow.isDestroyed()) {
-    const workArea = require('electron').screen.getPrimaryDisplay().workArea;
-    const [x, y] = menuWindow.getPosition();
+    const screen = require('electron').screen;
     let newHeight = Math.round(height);
-    // Ensure minimum height
     if (newHeight < 100) newHeight = 100;
-    // Push up if would go off bottom of screen
+
+    const [x, y] = menuWindow.getPosition();
+    const workArea = screen.getDisplayNearestPoint({ x: x, y: y }).workArea;
+    const ballBounds = ballWindow && !ballWindow.isDestroyed() ? ballWindow.getBounds() : null;
+
     let newY = y;
+
+    // If opening downward would overflow bottom, open upward (align menu bottom with ball top)
+    if (ballBounds && newY + newHeight > workArea.y + workArea.height) {
+      newY = ballBounds.y - newHeight;
+    }
+
+    // Clamp to work area (handles both top and bottom edges)
+    if (newY < workArea.y) newY = workArea.y;
     if (newY + newHeight > workArea.y + workArea.height) {
       newY = workArea.y + workArea.height - newHeight;
-      if (newY < workArea.y) newY = workArea.y;
     }
+
     menuWindow.setBounds({ x: x, y: newY, width: 220, height: newHeight });
-    writeLog('MAIN', 'resize-menu: ' + newHeight + ' y=' + newY);
+    writeLog('MAIN', 'resize-menu: h=' + newHeight + ' y=' + newY);
   }
 });
 
