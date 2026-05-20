@@ -348,17 +348,18 @@ function findGitBash() {
   return '';
 }
 
-ipcMain.handle('launch-project', (event, projectPath) => {
-  writeLog('MAIN', 'launch-project: ' + projectPath);
+ipcMain.handle('launch-project', (event, projectPath, mode) => {
+  writeLog('MAIN', 'launch-project: ' + projectPath + ' mode=' + (mode || 'default'));
   const bashPath = findGitBash();
   const escapedPath = projectPath.replace(/'/g, "''");
   const claudeCmd = path.join(process.env.APPDATA || '', 'npm', 'claude.cmd').replace(/'/g, "''");
+  const extraArgs = mode === 'bypassPermission' ? ' --dangerously-skip-permissions' : '';
   let psCmd;
   if (bashPath) {
     const bashEscaped = bashPath.replace(/'/g, "''");
-    psCmd = `$env:CLAUDE_CODE_GIT_BASH_PATH='${bashEscaped}'; Set-Location -LiteralPath '${escapedPath}'; & '${claudeCmd}'`;
+    psCmd = `$env:CLAUDE_CODE_GIT_BASH_PATH='${bashEscaped}'; Set-Location -LiteralPath '${escapedPath}'; & '${claudeCmd}'${extraArgs}`;
   } else {
-    psCmd = `Set-Location -LiteralPath '${escapedPath}'; & '${claudeCmd}'`;
+    psCmd = `Set-Location -LiteralPath '${escapedPath}'; & '${claudeCmd}'${extraArgs}`;
   }
   exec(`start "Claude" powershell -NoExit -Command "${psCmd}"`);
 });

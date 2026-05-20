@@ -3,7 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electronAPI', {
   log: (msg) => ipcRenderer.invoke('log', msg),
   getProjects: () => ipcRenderer.invoke('get-projects'),
-  launchProject: (path) => ipcRenderer.invoke('launch-project', path),
+  launchProject: (path, mode) => ipcRenderer.invoke('launch-project', path, mode),
   showBallMenu: () => ipcRenderer.invoke('show-ball-menu'),
   hideMenu: () => ipcRenderer.invoke('hide-menu'),
   openSettings: () => ipcRenderer.invoke('open-settings'),

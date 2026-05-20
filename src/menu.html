@@ -40,13 +40,45 @@
     }
     .project-list { max-height: 300px; overflow-y: auto; }
     .project-item {
-      padding: 10px 12px; cursor: pointer;
+      padding: 8px 10px; cursor: default;
       display: flex; align-items: center; gap: 8px;
       font-size: 13px;
       transition: background 0.15s;
     }
     .project-item:hover { background: #3d3d3d; }
-    .project-item .icon { color: #f5a623; }
+    .project-item .icon { color: #f5a623; flex-shrink: 0; }
+    .project-name {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+    .project-actions {
+      display: flex;
+      gap: 2px;
+      opacity: 0;
+      transition: opacity 0.15s;
+      flex-shrink: 0;
+    }
+    .project-item:hover .project-actions { opacity: 1; }
+    .action-btn {
+      width: 24px; height: 24px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      color: #888;
+      background: transparent;
+      border: none;
+      padding: 0;
+      font-family: 'Segoe UI', sans-serif;
+    }
+    .action-btn:hover { background: #555; }
+    .action-btn.default-mode { color: #7ee787; }
+    .action-btn.default-mode:hover { color: #a8f5b4; }
+    .action-btn.bypass-mode { color: #fca5a5; }
+    .action-btn.bypass-mode:hover { color: #fecaca; }
     .divider {
       height: 1px; background: #3d3d3d;
       margin: 4px 0;
@@ -149,10 +181,21 @@
         var item = document.createElement('div');
         item.className = 'project-item';
         var name = projectPath.replace(/\\/g, '/').split('/').pop() || projectPath;
-        item.innerHTML = '<span class="icon">📁</span><span>' + name + '</span>';
-        item.title = projectPath;
-        item.addEventListener('click', function() {
-          api.launchProject(projectPath);
+        item.innerHTML =
+          '<span class="icon">📁</span>' +
+          '<span class="project-name" title="' + projectPath + '">' + name + '</span>' +
+          '<div class="project-actions">' +
+            '<button class="action-btn default-mode" title="默认模式启动">▶</button>' +
+            '<button class="action-btn bypass-mode" title="跳过权限启动">⚡</button>' +
+          '</div>';
+        item.querySelector('.default-mode').addEventListener('click', function(e) {
+          e.stopPropagation();
+          api.launchProject(projectPath, 'autoEdit');
+          api.hideMenu();
+        });
+        item.querySelector('.bypass-mode').addEventListener('click', function(e) {
+          e.stopPropagation();
+          api.launchProject(projectPath, 'bypassPermission');
           api.hideMenu();
         });
         list.appendChild(item);
