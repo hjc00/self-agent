@@ -19,6 +19,10 @@
       from { transform-origin: top center; transform: scaleY(1); }
       to   { transform-origin: top center; transform: scaleY(0); }
     }
+    @keyframes dropdownIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to   { opacity: 1; transform: scale(1); }
+    }
     .menu-wrapper {
       background: #2d2d2d;
       border-radius: 8px;
@@ -44,6 +48,7 @@
       display: flex; align-items: center; gap: 8px;
       font-size: 13px;
       transition: background 0.15s;
+      position: relative;
     }
     .project-item:hover { background: #3d3d3d; }
     .project-item .icon { color: #f5a623; flex-shrink: 0; }
@@ -79,6 +84,48 @@
     .action-btn.default-mode:hover { color: #a8f5b4; }
     .action-btn.bypass-mode { color: #fca5a5; }
     .action-btn.bypass-mode:hover { color: #fecaca; }
+
+    /* Dropdown */
+    .dropdown {
+      position: absolute;
+      right: 4px;
+      top: calc(100% + 2px);
+      width: 180px;
+      background: #2d2d2d;
+      border: 1px solid #3a3a3a;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      z-index: 100;
+      display: none;
+      animation: dropdownIn 0.12s ease-out;
+      overflow: hidden;
+    }
+    .dropdown.show { display: block; }
+    .dropdown.drop-up {
+      top: auto;
+      bottom: calc(100% + 2px);
+    }
+    .dropdown-item {
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #ccc;
+      cursor: pointer;
+      transition: background 0.12s;
+      white-space: nowrap;
+    }
+    .dropdown-item:hover { background: #3d3d3d; color: #fff; }
+    .dropdown-item .dd-icon { width: 16px; text-align: center; flex-shrink: 0; }
+    .dropdown-item.remove { color: #e81123; }
+    .dropdown-item.remove:hover { background: #3d3d3d; }
+    .dropdown-divider {
+      height: 1px;
+      background: #3a3a3a;
+      margin: 2px 0;
+    }
+
     .divider {
       height: 1px; background: #3d3d3d;
       margin: 4px 0;
@@ -133,6 +180,7 @@
   <script>
     var api = window.electronAPI;
     var wrapper = document.getElementById('menuWrapper');
+    var openDropdown = null;
 
     api.onMenuShow(function() {
       requestAnimationFrame(function() {
@@ -162,6 +210,62 @@
       setTimeout(finish, 350);
     });
 
+    function closeAllDropdowns() {
+      if (openDropdown) {
+        openDropdown.classList.remove('show');
+        openDropdown = null;
+      }
+    }
+
+    document.addEventListener('click', function(e) {
+      if (openDropdown && !e.target.closest('.dropdown') && !e.target.closest('.more-btn')) {
+        closeAllDropdowns();
+      }
+    });
+
+    function buildDropdown(project, itemEl, isNearBottom) {
+      var dropdown = document.createElement('div');
+      dropdown.className = 'dropdown' + (isNearBottom ? ' drop-up' : '');
+      dropdown.innerHTML =
+        '<div class="dropdown-item" data-action="toggle-hooks">' +
+          '<span class="dd-icon">🪝</span>' +
+          '<span>' + (project.disableHooks ? '启用 Git Hook' : '禁用 Git Hook') + '</span>' +
+        '</div>' +
+        '<div class="dropdown-item" data-action="open-explorer">' +
+          '<span class="dd-icon">📂</span>' +
+          '<span>在资源管理器中打开</span>' +
+        '</div>' +
+        '<div class="dropdown-divider"></div>' +
+        '<div class="dropdown-item remove" data-action="remove">' +
+          '<span class="dd-icon">🗑</span>' +
+          '<span>从列表中移除</span>' +
+        '</div>';
+
+      dropdown.querySelector('[data-action="toggle-hooks"]').addEventListener('click', async function(e) {
+        e.stopPropagation();
+        var result = await api.toggleGitHooks(project.path);
+        if (result.success) {
+          project.disableHooks = result.disableHooks;
+          this.querySelector('span:last-child').textContent = result.disableHooks ? '启用 Git Hook' : '禁用 Git Hook';
+        }
+        api.log('toggle-git-hooks: ' + JSON.stringify(result));
+      });
+
+      dropdown.querySelector('[data-action="open-explorer"]').addEventListener('click', function(e) {
+        e.stopPropagation();
+        api.openInExplorer(project.path);
+      });
+
+      dropdown.querySelector('[data-action="remove"]').addEventListener('click', async function(e) {
+        e.stopPropagation();
+        await api.removeProject(project.path);
+        closeAllDropdowns();
+        loadProjects();
+      });
+
+      return dropdown;
+    }
+
     async function loadProjects() {
       var list = document.getElementById('projectList');
       var projects = [];
@@ -174,10 +278,15 @@
 
       if (!projects || projects.length === 0) {
         list.innerHTML = '<div class="empty">暂无项目，请编辑 projects.json</div>';
+        requestAnimationFrame(function() {
+          api.resizeMenu(document.body.scrollHeight);
+        });
         return;
       }
 
-      projects.forEach(function(projectPath) {
+      var total = projects.length;
+      projects.forEach(function(project, index) {
+        var projectPath = project.path || project;
         var item = document.createElement('div');
         item.className = 'project-item';
         var name = projectPath.replace(/\\/g, '/').split('/').pop() || projectPath;
@@ -187,7 +296,14 @@
           '<div class="project-actions">' +
             '<button class="action-btn default-mode" title="默认模式启动">▶</button>' +
             '<button class="action-btn bypass-mode" title="跳过权限启动">⚡</button>' +
+            '<button class="action-btn more-btn" title="更多">⋮</button>' +
           '</div>';
+
+        // Dropdown
+        var isNearBottom = index >= total - 2 && total > 3;
+        var dropdown = buildDropdown(project, item, isNearBottom);
+        item.appendChild(dropdown);
+
         item.querySelector('.default-mode').addEventListener('click', function(e) {
           e.stopPropagation();
           api.launchProject(projectPath, 'autoEdit');
@@ -198,7 +314,23 @@
           api.launchProject(projectPath, 'bypassPermission');
           api.hideMenu();
         });
+        item.querySelector('.more-btn').addEventListener('click', function(e) {
+          e.stopPropagation();
+          if (openDropdown === dropdown) {
+            dropdown.classList.remove('show');
+            openDropdown = null;
+          } else {
+            closeAllDropdowns();
+            dropdown.classList.add('show');
+            openDropdown = dropdown;
+          }
+        });
+
         list.appendChild(item);
+      });
+
+      requestAnimationFrame(function() {
+        api.resizeMenu(document.body.scrollHeight);
       });
     }
 

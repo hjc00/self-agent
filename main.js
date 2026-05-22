@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, dialog } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { exec } = require('child_process');
@@ -75,14 +75,30 @@ function saveConfig() {
   writeLog('MAIN', `config saved: x=${config.ball_x} y=${config.ball_y}`);
 }
 
+function normalizeProject(entry) {
+  if (typeof entry === 'string') {
+    return { path: entry, disableHooks: false };
+  }
+  if (entry && typeof entry === 'object') {
+    return { path: entry.path || '', disableHooks: !!entry.disableHooks };
+  }
+  return { path: '', disableHooks: false };
+}
+
 function loadProjects() {
   try {
     const raw = fs.readFileSync(projectsPath, 'utf-8');
     const data = JSON.parse(raw);
-    return data.projects || [];
+    const rawList = data.projects || [];
+    return rawList.map(normalizeProject).filter(p => p.path);
   } catch (e) {
     return [];
   }
+}
+
+function saveProjects(projects) {
+  if (!fs.existsSync(configDir)) fs.mkdirSync(configDir, { recursive: true });
+  fs.writeFileSync(projectsPath, JSON.stringify({ projects }, null, 2));
 }
 
 function isAutostartEnabled() {
@@ -466,15 +482,56 @@ ipcMain.handle('add-project', async () => {
   const newPath = result.filePaths[0];
   const projects = loadProjects();
 
-  if (projects.includes(newPath)) {
+  if (projects.some(p => p.path === newPath)) {
     return { success: false, reason: 'duplicate', path: newPath };
   }
 
-  projects.push(newPath);
-  if (!fs.existsSync(configDir)) fs.mkdirSync(configDir, { recursive: true });
-  fs.writeFileSync(projectsPath, JSON.stringify({ projects }, null, 2));
+  projects.push({ path: newPath, disableHooks: false });
+  saveProjects(projects);
   writeLog('MAIN', 'add-project: added ' + newPath);
   return { success: true, path: newPath };
+});
+
+ipcMain.handle('toggle-git-hooks', async (event, projectPath) => {
+  const projects = loadProjects();
+  const project = projects.find(p => p.path === projectPath);
+  if (!project) {
+    return { success: false, error: 'Project not found' };
+  }
+
+  const newState = !project.disableHooks;
+  const gitCmd = newState
+    ? `git -C "${projectPath}" config --local core.hooksPath /dev/null`
+    : `git -C "${projectPath}" config --local --unset core.hooksPath`;
+
+  return new Promise((resolve) => {
+    exec(gitCmd, (err, stdout, stderr) => {
+      if (err) {
+        const isUnsetNotFound = !newState && (err.code === 5 || stderr.includes('exit code 5') || stderr.includes('section or key is invalid'));
+        if (!isUnsetNotFound) {
+          writeLog('MAIN', 'toggle-git-hooks error: ' + (stderr || err.message));
+          resolve({ success: false, error: stderr || err.message });
+          return;
+        }
+      }
+      project.disableHooks = newState;
+      saveProjects(projects);
+      writeLog('MAIN', `toggle-git-hooks: ${projectPath} disableHooks=${newState}`);
+      resolve({ success: true, disableHooks: newState });
+    });
+  });
+});
+
+ipcMain.handle('remove-project', (event, projectPath) => {
+  const projects = loadProjects().filter(p => p.path !== projectPath);
+  saveProjects(projects);
+  writeLog('MAIN', 'remove-project: removed ' + projectPath);
+  return { success: true, projects };
+});
+
+ipcMain.handle('open-in-explorer', (event, projectPath) => {
+  shell.openPath(projectPath);
+  writeLog('MAIN', 'open-in-explorer: ' + projectPath);
 });
 
 ipcMain.handle('quit-app', () => {
