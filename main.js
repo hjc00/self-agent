@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, dialog } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { exec } = require('child_process');
@@ -75,14 +75,30 @@ function saveConfig() {
   writeLog('MAIN', `config saved: x=${config.ball_x} y=${config.ball_y}`);
 }
 
+function normalizeProject(entry) {
+  if (typeof entry === 'string') {
+    return { path: entry, disableHooks: false };
+  }
+  if (entry && typeof entry === 'object') {
+    return { path: entry.path || '', disableHooks: !!entry.disableHooks };
+  }
+  return { path: '', disableHooks: false };
+}
+
 function loadProjects() {
   try {
     const raw = fs.readFileSync(projectsPath, 'utf-8');
     const data = JSON.parse(raw);
-    return data.projects || [];
+    const rawList = data.projects || [];
+    return rawList.map(normalizeProject).filter(p => p.path);
   } catch (e) {
     return [];
   }
+}
+
+function saveProjects(projects) {
+  if (!fs.existsSync(configDir)) fs.mkdirSync(configDir, { recursive: true });
+  fs.writeFileSync(projectsPath, JSON.stringify({ projects }, null, 2));
 }
 
 function isAutostartEnabled() {
@@ -209,6 +225,7 @@ function createBallWindow() {
   });
 
   ballWindow.loadFile('src/ball.html');
+  ballWindow.setAlwaysOnTop(true, 'screen-saver');
   ballWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
   ballWindow.on('moved', () => {
@@ -240,13 +257,30 @@ function createMenuWindow() {
     return;
   }
 
-  const [bx, by] = ballWindow.getPosition();
-  const menuX = bx + 64 + 6;
-  const menuY = by;
+  const screen = require('electron').screen;
+  const ballBounds = ballWindow.getBounds();
+  const workArea = screen.getDisplayMatching(ballBounds).workArea;
+
+  const MENU_WIDTH = 220;
+  const MENU_INITIAL_HEIGHT = 600;
+  const GAP = 6;
+
+  // Horizontal: prefer right of ball; flip to left if it would overflow
+  let menuX = ballBounds.x + ballBounds.width + GAP;
+  if (menuX + MENU_WIDTH > workArea.x + workArea.width) {
+    menuX = ballBounds.x - GAP - MENU_WIDTH;
+  }
+  if (menuX < workArea.x) menuX = workArea.x;
+  if (menuX + MENU_WIDTH > workArea.x + workArea.width) {
+    menuX = workArea.x + workArea.width - MENU_WIDTH;
+  }
+
+  // Vertical: align top with ball; actual height adjustment happens in resize-menu
+  let menuY = ballBounds.y;
 
   menuWindow = new BrowserWindow({
-    width: 220,
-    height: 600,
+    width: MENU_WIDTH,
+    height: MENU_INITIAL_HEIGHT,
     x: menuX,
     y: menuY,
     frame: false,
@@ -264,6 +298,7 @@ function createMenuWindow() {
   });
 
   menuWindow.loadFile('src/menu.html');
+  menuWindow.setAlwaysOnTop(true, 'screen-saver');
   menuWindow.once('ready-to-show', () => {
     menuWindow.show();
     menuWindow.webContents.send('menu-show');
@@ -329,17 +364,18 @@ function findGitBash() {
   return '';
 }
 
-ipcMain.handle('launch-project', (event, projectPath) => {
-  writeLog('MAIN', 'launch-project: ' + projectPath);
+ipcMain.handle('launch-project', (event, projectPath, mode) => {
+  writeLog('MAIN', 'launch-project: ' + projectPath + ' mode=' + (mode || 'default'));
   const bashPath = findGitBash();
   const escapedPath = projectPath.replace(/'/g, "''");
   const claudeCmd = path.join(process.env.APPDATA || '', 'npm', 'claude.cmd').replace(/'/g, "''");
+  const extraArgs = mode === 'bypassPermission' ? ' --dangerously-skip-permissions' : '';
   let psCmd;
   if (bashPath) {
     const bashEscaped = bashPath.replace(/'/g, "''");
-    psCmd = `$env:CLAUDE_CODE_GIT_BASH_PATH='${bashEscaped}'; Set-Location -LiteralPath '${escapedPath}'; & '${claudeCmd}'`;
+    psCmd = `$env:CLAUDE_CODE_GIT_BASH_PATH='${bashEscaped}'; Set-Location -LiteralPath '${escapedPath}'; & '${claudeCmd}'${extraArgs}`;
   } else {
-    psCmd = `Set-Location -LiteralPath '${escapedPath}'; & '${claudeCmd}'`;
+    psCmd = `Set-Location -LiteralPath '${escapedPath}'; & '${claudeCmd}'${extraArgs}`;
   }
   exec(`start "Claude" powershell -NoExit -Command "${psCmd}"`);
 });
@@ -446,15 +482,56 @@ ipcMain.handle('add-project', async () => {
   const newPath = result.filePaths[0];
   const projects = loadProjects();
 
-  if (projects.includes(newPath)) {
+  if (projects.some(p => p.path === newPath)) {
     return { success: false, reason: 'duplicate', path: newPath };
   }
 
-  projects.push(newPath);
-  if (!fs.existsSync(configDir)) fs.mkdirSync(configDir, { recursive: true });
-  fs.writeFileSync(projectsPath, JSON.stringify({ projects }, null, 2));
+  projects.push({ path: newPath, disableHooks: false });
+  saveProjects(projects);
   writeLog('MAIN', 'add-project: added ' + newPath);
   return { success: true, path: newPath };
+});
+
+ipcMain.handle('toggle-git-hooks', async (event, projectPath) => {
+  const projects = loadProjects();
+  const project = projects.find(p => p.path === projectPath);
+  if (!project) {
+    return { success: false, error: 'Project not found' };
+  }
+
+  const newState = !project.disableHooks;
+  const gitCmd = newState
+    ? `git -C "${projectPath}" config --local core.hooksPath /dev/null`
+    : `git -C "${projectPath}" config --local --unset core.hooksPath`;
+
+  return new Promise((resolve) => {
+    exec(gitCmd, (err, stdout, stderr) => {
+      if (err) {
+        const isUnsetNotFound = !newState && (err.code === 5 || stderr.includes('exit code 5') || stderr.includes('section or key is invalid'));
+        if (!isUnsetNotFound) {
+          writeLog('MAIN', 'toggle-git-hooks error: ' + (stderr || err.message));
+          resolve({ success: false, error: stderr || err.message });
+          return;
+        }
+      }
+      project.disableHooks = newState;
+      saveProjects(projects);
+      writeLog('MAIN', `toggle-git-hooks: ${projectPath} disableHooks=${newState}`);
+      resolve({ success: true, disableHooks: newState });
+    });
+  });
+});
+
+ipcMain.handle('remove-project', (event, projectPath) => {
+  const projects = loadProjects().filter(p => p.path !== projectPath);
+  saveProjects(projects);
+  writeLog('MAIN', 'remove-project: removed ' + projectPath);
+  return { success: true, projects };
+});
+
+ipcMain.handle('open-in-explorer', (event, projectPath) => {
+  shell.openPath(projectPath);
+  writeLog('MAIN', 'open-in-explorer: ' + projectPath);
 });
 
 ipcMain.handle('quit-app', () => {
@@ -470,19 +547,29 @@ ipcMain.handle('quit-app', () => {
 
 ipcMain.handle('resize-menu', (event, height) => {
   if (menuWindow && !menuWindow.isDestroyed()) {
-    const workArea = require('electron').screen.getPrimaryDisplay().workArea;
-    const [x, y] = menuWindow.getPosition();
+    const screen = require('electron').screen;
     let newHeight = Math.round(height);
-    // Ensure minimum height
     if (newHeight < 100) newHeight = 100;
-    // Push up if would go off bottom of screen
+
+    const [x, y] = menuWindow.getPosition();
+    const workArea = screen.getDisplayNearestPoint({ x: x, y: y }).workArea;
+    const ballBounds = ballWindow && !ballWindow.isDestroyed() ? ballWindow.getBounds() : null;
+
     let newY = y;
+
+    // If opening downward would overflow bottom, open upward (align menu bottom with ball top)
+    if (ballBounds && newY + newHeight > workArea.y + workArea.height) {
+      newY = ballBounds.y - newHeight;
+    }
+
+    // Clamp to work area (handles both top and bottom edges)
+    if (newY < workArea.y) newY = workArea.y;
     if (newY + newHeight > workArea.y + workArea.height) {
       newY = workArea.y + workArea.height - newHeight;
-      if (newY < workArea.y) newY = workArea.y;
     }
+
     menuWindow.setBounds({ x: x, y: newY, width: 220, height: newHeight });
-    writeLog('MAIN', 'resize-menu: ' + newHeight + ' y=' + newY);
+    writeLog('MAIN', 'resize-menu: h=' + newHeight + ' y=' + newY);
   }
 });
 
